@@ -25,7 +25,7 @@
 encode(#hep{ protocol_family = 2
            , protocol = Protocol
            , src_ip = {S0, S1, S2, S3}
-           , src_port = SrcPort,
+           , src_port = SrcPort
            , dst_ip = {D0, D1, D2, D3}
            , dst_port = DstPort
            , timestamp = Timestamp
@@ -57,10 +57,12 @@ encode(#hep{ protocol_family = 10
             Secs:32, Micros:32, NodeId:16, 0:16, Payload/binary>>,
     {ok, Bin};
 
-encode(#hep{protocol_family = ProtocolFamily}) ->
+encode(#hep{protocol_family = ProtocolFamily})
+  when ProtocolFamily =/= 2; ProtocolFamily =/= 10 ->
     {error, {unknown_protocol_family, ProtocolFamily}};
 
-encode(#hep{payload_type = PayloadType}) ->
+encode(#hep{payload_type = PayloadType})
+  when PayloadType =/= 1 ->
     {error, {unsupported_payload_type, PayloadType}};
 
 encode(Hep) ->

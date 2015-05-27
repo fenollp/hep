@@ -22,7 +22,7 @@
 	     , dst_ip :: inet:ip_address()
 	     , dst_port :: inet:port_number()
 	     , timestamp :: erlang:timestamp()
-	     , node_id :: hep:uint16() | hep:uint32() | undefined,
+	     , node_id :: hep:uint16() | hep:uint32() | undefined
 	     , payload_type = 1 :: hep:uint8()
 	     , payload = <<>> :: binary()
 	     , chunks = [] :: [hep:chunk()]

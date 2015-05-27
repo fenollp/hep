@@ -49,10 +49,12 @@ encode(#hep{ protocol_family = 10
             Payload/binary>>,
     {ok, Bin};
 
-encode(#hep{protocol_family = ProtocolFamily}) ->
+encode(#hep{protocol_family = ProtocolFamily})
+  when ProtocolFamily =/= 2; ProtocolFamily =/= 10 ->
     {error, {unknown_protocol_family, ProtocolFamily}};
 
-encode(#hep{payload_type = PayloadType}) ->
+encode(#hep{payload_type = PayloadType})
+  when PayloadType =/= 1 ->
     {error, {unsupported_payload_type, PayloadType}}.
 
 %% Internals

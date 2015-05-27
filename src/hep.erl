@@ -39,14 +39,15 @@
 -type chunk_value_length() :: 0..65535.
 -type chunk_value() :: binary().
 -type chunk() :: {{vendor_id(), chunk_id()}, {chunk_value_length(), chunk_value()}}.
-
 -type vendor_id() :: 1..65535.
 -type chunk_id() :: uint16().
+
 -opaque state() :: #hep{}.
 
 %% API
 
 -spec decode(binary()) -> {ok, state()} | {error, _, binary()}.
+
 decode(<<1:8, _Rest/binary>> = Packet) ->
     hep_v1_decoder:decode(Packet);
 decode(<<2:8, _Rest/binary>> = Packet) ->
