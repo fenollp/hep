@@ -16,45 +16,41 @@
 
 -include("hep.hrl").
 
+-export([encode/1]).
 -export([decode/1]).
 
 -export_type([ uint8/0
              , uint16/0
-             , uint32/0
-             , version/0
-             , chunk_value_length/0
-             , chunk_value/0
-             , chunk/0
-             , vendor_id/0
-             , chunk_id/0
-             , state/0
-             ]).
+             , uint32/0 ]).
+-export_type([version/0]).
+-export_type([t/0]).
 
 -type uint8() :: 0..255.
 -type uint16() :: 0..65535.
 -type uint32() :: 0..4294967295.
 
--type version() :: 1 | 2 | 3.
+-type version() :: hep_v1 | hep_v2 | hep_v3.
 
--type chunk_value_length() :: 0..65535.
--type chunk_value() :: binary().
--type chunk() :: {{vendor_id(), chunk_id()}, {chunk_value_length(), chunk_value()}}.
--type vendor_id() :: 1..65535.
--type chunk_id() :: uint16().
-
--opaque state() :: #hep{}.
+-opaque t() :: #hep{}.
 
 %% API
 
--spec decode(binary()) -> {ok, state()} | {error, _, binary()}.
+-spec encode(t()) -> {ok, binary()} | {error, _}.
+encode(#hep{version = Version} = Hep)
+  when Version == hep_v1; Version == hep_v2; Version == hep_v3 ->
+    Version:encode(Hep);
+encode(Hep) ->
+    {error, {invalid_hep, Hep}}.
 
-decode(<<1:8, _Rest/binary>> = Packet) ->
-    hep_v1_decoder:decode(Packet);
-decode(<<2:8, _Rest/binary>> = Packet) ->
-    hep_v2_decoder:decode(Packet);
-decode(<<"HEP3", _Rest/binary>> = Packet) ->
-    hep_v3_decoder:decode(Packet);
-decode(<<Packet/binary>>) ->
+
+-spec decode(binary()) -> {ok, t()} | {error, _, binary()}.
+decode(Packet = <<1:8, _Rest/binary>>) ->
+    hep_v1:decode(Packet);
+decode(Packet = <<2:8, _Rest/binary>>) ->
+    hep_v2:decode(Packet);
+decode(Packet = <<"HEP3", _Rest/binary>>) ->
+    hep_v3:decode(Packet);
+decode(Packet = <<_/binary>>) ->
     {error, invalid_packet, Packet}.
 
 %% Internals

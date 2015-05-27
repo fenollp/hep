@@ -13,16 +13,12 @@
 %% OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 {application, hep, [ {description, "hep - Homer Encapsulation Protocol"}
-                   , {vsn, "0.1.0"}
+                   , {vsn, "1.0.0"}
                    , {modules, [ hep
-                               , hep_multi_decoder
                                , hep_util
-                               , hep_v1_decoder
-                               , hep_v1_encoder
-                               , hep_v2_decoder
-                               , hep_v2_encoder
-                               , hep_v3_decoder
-                               , hep_v3_encoder
+                               , hep_v1
+                               , hep_v2
+                               , hep_v3
                                ]}
                    , {registered, []}
                    , {applications, [ kernel
