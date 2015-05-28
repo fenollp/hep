@@ -173,41 +173,18 @@ set_field(?VLAN_ID, <<_Data:8>>, Hep) ->
 
 
 pack_chunks(Hep) ->
-    encode(protocol_family, <<>>, Hep).
-
-encode(protocol_family, _Acc, #hep{protocol_family = ProtocolFamily})
-  when ProtocolFamily =/= 'ipv4', ProtocolFamily =/= 'ipv6' ->
-    {error, {invalid_protocol_family,ProtocolFamily}};
-encode(protocol_family=Field, Acc, Hep) ->
-    Chunk = make_chunk(Field, Hep),
-    encode(protocol, <<Chunk/binary, Acc/binary>>, Hep);
-encode(protocol=Field, Acc, Hep) ->
-    Chunk = make_chunk(Field, Hep),
-    encode(src_ip, <<Chunk/binary, Acc/binary>>, Hep);
-encode(src_ip=Field, Acc, Hep) ->
-    Chunk = make_chunk(Field, Hep),
-    encode(dst_ip, <<Chunk/binary, Acc/binary>>, Hep);
-encode(dst_ip=Field, Acc, Hep) ->
-    Chunk = make_chunk(Field, Hep),
-    encode(src_port, <<Chunk/binary, Acc/binary>>, Hep);
-encode(src_port=Field, Acc, Hep) ->
-    Chunk = make_chunk(Field, Hep),
-    encode(dst_port, <<Chunk/binary, Acc/binary>>, Hep);
-encode(dst_port=Field, Acc, Hep) ->
-    Chunk = make_chunk(Field, Hep),
-    encode(timestamp, <<Chunk/binary, Acc/binary>>, Hep);
-encode(timestamp=Field, Acc, Hep) ->
-    Chunk = make_chunk(Field, Hep),
-    encode(node_id, <<Chunk/binary, Acc/binary>>, Hep);
-encode(node_id=Field, Acc, Hep) ->
-    Chunk = make_chunk(Field, Hep),
-    encode(payload_type, <<Chunk/binary, Acc/binary>>, Hep);
-encode(payload_type=Field, Acc, Hep) ->
-    Chunk = make_chunk(Field, Hep),
-    encode(payload, <<Chunk/binary, Acc/binary>>, Hep);
-encode(payload=Field, Acc, Hep) ->
-    Chunk = make_chunk(Field, Hep),
-    <<Chunk/binary, Acc/binary>>.
+    Fields = [ protocol_family
+             , protocol
+             , src_ip
+             , dst_ip
+             , src_port
+             , dst_port
+             , timestamp
+             , node_id
+             , payload_type
+             , payload
+             ],
+    << <<(make_chunk(Field, Hep))/binary>> || Field <- Fields >>.
 
 
 make_chunk(protocol_family, #hep{protocol_family = Data}=Hep) ->
