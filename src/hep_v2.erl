@@ -19,6 +19,8 @@
 -export([encode/1]).
 -export([decode/1]).
 
+-define(node_id(Val), Val:16).
+
 %% API
 
 -spec encode(hep:t()) -> {ok, binary()} | {error, _}.

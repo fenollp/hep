@@ -32,7 +32,8 @@ timestamp_secs({M, S, _U}) ->
 timestamp_microsecs({_M, _S, U}) ->
     U.
 
--spec payload_type(hep:uint8() | atom()) -> atom() | hep:uint8() | {error, _}.
+-spec payload_type(hep:uint8() | hep:payload_type()) ->
+                          hep:payload_type() | hep:uint8() | {error, _}.
 payload_type(?PROTOCOL_RESERVED) -> 'reserved';
 payload_type(?PROTOCOL_SIP) -> 'sip';
 payload_type(?PROTOCOL_XMPP) -> 'xmpp';
@@ -62,7 +63,8 @@ payload_type('h321') -> ?PROTOCOL_H321;
 payload_type(Protocol) ->
     {error, {invalid_protocol, Protocol}}.
 
--spec protocol_family(hep:uint8() | atom()) -> atom() | hep:uint8() | {error, _}.
+-spec protocol_family(hep:uint8() | hep:protocol_family()) ->
+                             hep:protocol_family() | hep:uint8() | {error, _}.
 protocol_family(?FAMILY_IPV4) -> 'ipv4';
 protocol_family(?FAMILY_IPV6) -> 'ipv6';
 protocol_family('ipv4') -> ?FAMILY_IPV4;

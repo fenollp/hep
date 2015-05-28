@@ -23,7 +23,8 @@
 
 -spec encode(hep:t()) -> {ok, binary()} | {error, _}.
 
-encode(#hep{ protocol_family = ProtocolFamily = 'ipv4'
+encode(#hep{ version = ?MODULE
+           , protocol_family = ProtocolFamily = 'ipv4'
            , protocol = Protocol
            , src_ip = {S1, S2, S3, S4}
            , src_port = SrcPort
@@ -39,7 +40,8 @@ encode(#hep{ protocol_family = ProtocolFamily = 'ipv4'
             Payload/binary>>,
     {ok, Bin};
 
-encode(#hep{ protocol_family = ProtocolFamily = 'ipv6'
+encode(#hep{ version = ?MODULE
+           , protocol_family = ProtocolFamily = 'ipv6'
            , protocol = Protocol
            , src_ip = {S1, S2, S3, S4, S5, S6, S7, S8}
            , src_port = SrcPort

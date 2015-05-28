@@ -15,17 +15,17 @@
 -ifndef(HEP_HRL).
 
 -record(hep, { version :: hep:version()
-             , protocol_family :: 'ipv4' | 'ipv6'
+             , protocol_family :: hep:protocol_family()
              , protocol :: hep:uint8()
 	     , src_ip :: inet:ip_address()
 	     , src_port :: inet:port_number()
 	     , dst_ip :: inet:ip_address()
 	     , dst_port :: inet:port_number()
-	     , timestamp :: erlang:timestamp() | undefined
-	     , node_id :: hep:uint16() | hep:uint32() | undefined
-	     , payload_type :: atom()
+	     , timestamp :: erlang:timestamp() | undefined  %% undefined in: v1
+	     , node_id :: hep:uint16() | hep:uint32() | undefined  %% undefined in: v1
+	     , payload_type :: hep:payload_type()
 	     , payload :: binary()
-             , vendor :: atom() | undefined
+             , vendor :: hep:vendor() | undefined  %% undefined in: v1, v2
              }).
 
 %% HEP Version IDs
@@ -45,14 +45,13 @@
 -define(protocol(Val), Val:8).
 -define(port(Val), Val:16).
 -define(timestamp(Val), Val:32).
--define(node_id(Val),  Val:32).
 -define(payload_type(Val), Val:8).
 -define(ipv4(I1, I2, I3, I4),
         I1:8, I2:8, I3:8, I4:8).
 -define(ipv6(I1, I2, I3, I4, I5, I6, I7, I8),
         I1:16, I2:16, I3:16, I4:16, I5:16, I6:16, I7:16, I8:16).
 
-%% Capture Protocol Types (0xb)
+%% Capture Protocol Types (0xb) (also called Payload Type)
 -define(PROTOCOL_RESERVED, 16#00).
 -define(PROTOCOL_SIP,      16#01).
 -define(PROTOCOL_XMPP,     16#02).

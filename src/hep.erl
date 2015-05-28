@@ -16,6 +16,9 @@
 
 -include("hep.hrl").
 
+-export([encode/1]).
+-export([decode/1]).
+
 -export([ new/0
         , protocol_family/1, protocol_family/2
         , protocol/1, protocol/2
@@ -30,28 +33,47 @@
         , vendor/1, vendor/2
         ]).
 
--export([encode/1]).
--export([decode/1]).
-
--export_type([ uint8/0
+-export_type([ t/0
+             , version/0
+             , vendor/0
+             , uint8/0
              , uint16/0
              , uint32/0 ]).
--export_type([version/0]).
--export_type([t/0]).
+
+-opaque t() :: #hep{}.
+
+-type version() :: 'hep_v1' | 'hep_v2' | 'hep_v3'.
+-type vendor() :: 'unknown'
+                | 'freeswitch'
+                | 'kamailio'
+                | 'opensips'
+                | 'asterisk'
+                | 'homer'
+                | 'sipxecs'.
+-type protocol_family() :: 'ipv4' | 'ipv6'.
+-type payload_type() :: 'reserved'
+                      | 'sip'
+                      | 'xmpp'
+                      | 'sdp'
+                      | 'rtp'
+                      | 'rtcp'
+                      | 'mgcp'
+                      | 'megaco'
+                      | 'm2ua'
+                      | 'm3ua'
+                      | 'iax'
+                      | 'h322'
+                      | 'h321'.
 
 -type uint8() :: 0..255.
 -type uint16() :: 0..65535.
 -type uint32() :: 0..4294967295.
 
--type version() :: hep_v1 | hep_v2 | hep_v3.
-
--opaque t() :: #hep{}.
-
 %% API
 
 -spec encode(t()) -> {ok, binary()} | {error, _}.
 encode(#hep{version = Version} = Hep)
-  when Version == hep_v1; Version == hep_v2; Version == hep_v3 ->
+  when Version == 'hep_v1'; Version == 'hep_v2'; Version == 'hep_v3' ->
     Version:encode(Hep);
 encode(Hep) ->
     {error, {invalid_hep, Hep}}.

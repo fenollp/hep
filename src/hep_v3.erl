@@ -1,3 +1,4 @@
+%% -*- coding: utf-8 -*-
 -module(hep_v3).
 
 -include("hep.hrl").
@@ -33,6 +34,8 @@
 -define(VENDOR_ASTERISK,      16#0004).
 -define(VENDOR_HOMER_PROJECT, 16#0005).
 -define(VENDOR_SIPXECS,       16#0006).
+
+-define(node_id(Val), Val:32).
 
 %% API
 
