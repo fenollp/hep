@@ -15,7 +15,7 @@
 -ifndef(HEP_HRL).
 
 -record(hep, { version :: hep:version()
-             , protocol_family :: hep:uint8()
+             , protocol_family :: 'ipv4' | 'ipv6'
              , protocol :: hep:uint8()
 	     , src_ip :: inet:ip_address()
 	     , src_port :: inet:port_number()
@@ -23,7 +23,7 @@
 	     , dst_port :: inet:port_number()
 	     , timestamp :: erlang:timestamp() | undefined
 	     , node_id :: hep:uint16() | hep:uint32() | undefined
-	     , payload_type :: hep:uint8()
+	     , payload_type :: atom()
 	     , payload :: binary()
              , vendor :: atom() | undefined
              }).

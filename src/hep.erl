@@ -16,6 +16,20 @@
 
 -include("hep.hrl").
 
+-export([ new/0
+        , protocol_family/1, protocol_family/2
+        , protocol/1, protocol/2
+        , src_ip/1, src_ip/2
+        , dst_ip/1, dst_ip/2
+        , src_port/1, src_port/2
+        , dst_port/1, dst_port/2
+        , timestamp/1, timestamp/2
+        , node_id/1, node_id/2
+        , payload_type/1, payload_type/2
+        , payload/1, payload/2
+        , vendor/1, vendor/2
+        ]).
+
 -export([encode/1]).
 -export([decode/1]).
 
@@ -52,6 +66,36 @@ decode(Packet = <<?HEP_V3_ID, _Rest/binary>>) ->
     hep_v3:decode(Packet);
 decode(Packet = <<_/binary>>) ->
     {error, invalid_packet, Packet}.
+
+
+
+%% Note: you can't have a dot inside a macro definition!
+-define(getter(Field), Field(#hep{Field = Val}) -> Val).
+-define(setter(Field), Field(Val, Hep) -> Hep#hep{Field = Val}).
+
+new () -> #hep{}.
+?getter(protocol_family).
+?setter(protocol_family).
+?getter(protocol).
+?setter(protocol).
+?getter(src_ip).
+?setter(src_ip).
+?getter(dst_ip).
+?setter(dst_ip).
+?getter(src_port).
+?setter(src_port).
+?getter(dst_port).
+?setter(dst_port).
+?getter(timestamp).
+?setter(timestamp).
+?getter(node_id).
+?setter(node_id).
+?getter(payload_type).
+?setter(payload_type).
+?getter(payload).
+?setter(payload).
+?getter(vendor).
+?setter(vendor).
 
 %% Internals
 

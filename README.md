@@ -37,34 +37,33 @@ Usage
 Very basic example:
 
 ```erlang
-
 -module(naive_udp_hep_listener).
 
 -export([start/1, stop/1]).
 
 start(Port) ->
-    ListenerPid = spawn(fun() ->
-        {ok, Socket} = gen_udp:open(Port, [binary, {active, true}]),
-        Loop = fun(Fun) ->
-            receive
-                {udp, _, _, _, Message} ->
-                    {ok, Hep} = hep_multi_parser:parse(Message),
-                    HepMsg = hep_transform:transform(Hep),
-                    error_logger:info_msg("~p~n", [HepMsg]),
-                    Fun(Fun);
-                stop ->
-                    gen_udp:close(Socket);
-                _ ->
-                    Fun(Fun)
-            end
-        end,
-        Loop(Loop)
-    end),
-    {ok, ListenerPid}.
+    Listener = fun () ->
+                       {ok, Socket} = gen_udp:open(Port, [binary, {active,true}]),
+                       loop()
+               end,
+    Pid = spawn(Listener),
+    {ok, Pid}.
 
-stop(ListenerPid) ->
+loop () ->
+    receive
+        {udp, _, _, _, Message} ->
+            {ok, Hep} = hep:decode(Message),
+            HepMsg = hep:payload(Hep),
+            error_logger:info_msg("~p~n", [HepMsg]),
+            loop();
+        stop ->
+            gen_udp:close(Socket);
+        _ ->
+            loop()
+    end.
+
+stop (ListenerPid) ->
     ListenerPid ! stop.
-
 ```
 
 Protocol Version 1
@@ -116,127 +115,7 @@ All integer fields are stored in network byte order.
 Protocol Version 3
 ------------------
 
-Each packet in HEP version 3 starts with a header:
-
-| Name                | Length   | Description                                                                      |
-|---------------------|----------|----------------------------------------------------------------------------------|
-| Protocol Identifier | 4 bytes  | Always contains "HEP3" for this version.                                         |
-| Total Length        | 2 bytes  | The total length of this packet, including Protocol Identifier and Total Length. |
-| Chunks              | variable | The payload as chunks, with a length of "Total Length" minus 6.                  |
-
-All data is encapsulated in chunks:
-
-| Name          | Length   | Description                                                       |
-|---------------|----------|-------------------------------------------------------------------|
-| Vendor ID     | 2 bytes  | Vendor Namespace of this chunk.                                   |
-| Chunk ID      | 2 bytes  | Vendor specific chunk id.                                         |
-| Chunk Length  | 2 bytes  | The total length of this chunk, including Vendor ID and Chunk ID. |
-| Chunk Payload | variable | The payload of the chunk, with a length of "Chunk Length minus 6. |
-
-The following chunk data types are defined:
-
-| Type         | Description                                          |
-|--------------|------------------------------------------------------|
-| octet-string | Arbitrary octet string ("byte array").               |
-| utf8-string  | UTF-8 encoded character sequence.                    |
-| uint8        | 8 bit unsigned integer.                              |
-| uint16       | 16 bit unsigned integer in network byte order.       |
-| uint32       | 32 bit unsigned integer in network byte order.       |
-| inet4-addr   | 4 octet IPv4 address, most significant octet first.  |
-| inet6-addr   | 16 octet IPv6 address, most significant octet first. |
-
-
-The following Vendor IDs are assigned:
-
-| Vendor ID | Assigned Vendor                 |
-|-----------|---------------------------------|
-| 16#0000   | Generic chunk types, see below. |
-| 16#0001   | FreeSWITCH                      |
-| 16#0002   | Kamailio                        |
-| 16#0003   | OpenSIPS                        |
-| 16#0004   | Asterisk                        |
-| 16#0005   | Homer Project                   |
-| 16#0006   | SipXecs                         |
-
-Generic chunk types:
-
-| Chunk ID | Type         | Description                          |
-|----------|--------------|--------------------------------------|
-| 16#0001  | uint8        | IP protocol family                   |
-| 16#0002  | uint8        | IP protocol id                       |
-| 16#0003  | inet4-addr   | IPv4 source address                  |
-| 16#0004  | inet4-addr   | IPv4 destination address             |
-| 16#0005  | inet6-addr   | IPv6 source address                  |
-| 16#0006  | inet6-addr   | IPv6 destination address             |
-| 16#0007  | uint16       | Protocol source port                 |
-| 16#0008  | uint16       | Protocol destination port            |
-| 16#0009  | uint32       | Timestamp in seconds since the Epoch |
-| 16#000a  | uint32       | Microseconds part of timestamp       |
-| 16#000b  | uint8        | Protocol type (see table below)      |
-| 16#000c  | uint32       | Capture agent id                     |
-| 16#000d  | uint16       | keep alive time in seconds           |
-| 16#000e  | octet-string | Authenticate key                     |
-| 16#000f  | octet-string | captured packet payload              |
-
-Protocol types:
-
-| Type ID | Description        |
-|---------|--------------------|
-| 16#00   | reserved           |
-| 16#01   | SIP                |
-| 16#02   | H.323              |
-| 16#03   | SDP                |
-| 16#04   | RTP                |
-| 16#05   | RTCP               |
-| 16#06   | MGCP               |
-| 16#07   | MEGACO / H.248     |
-| 16#08   | M2UA (SS7/SIGTRAN) |
-| 16#09   | M3UA (SS7/SIGTRAN) |
-| 16#10   | IAX                |
-
-JSON representation
--------------------
-
-```json
-[
-    {
-        "type": "HEP",
-        "version": 1,
-        "protocolFamily": 2,
-        "protocol": 17,
-        "srcIp": "192.168.3.11",
-        "srcPort": 5060,
-        "dstIp": "192.168.3.190",
-        "dstPort": 2048,
-        "timestamp": "2013-10-29T15:25:53.567Z",
-        "timestampUSecs": 123,
-        "captureId": null,
-        "vendorChunks": [],
-        "payload": {
-            "type": "SIP",
-            "data": "INVITE sip:100@pantech.intern SIP/2.0\r\n..."
-        }
-    },
-    {
-        "type": "HEP",
-        "version": 2,
-        "protocolFamily": 2,
-        "protocol": 17,
-        "srcIp": "192.168.3.12",
-        "srcPort": 5060,
-        "dstIp": "192.168.3.11",
-        "dstPort": 5060,
-        "timestamp": "2013-10-29T15:25:53:577Z",
-        "timestampUSecs": 0,
-        "captureId": 241,
-        "vendorChunks": [],
-        "payload": {
-            "type": "SIP",
-            "data": "INVITE sip:100@pantech.intern SIP/2.0\r\n..."
-        }
-    }
-]
-```
+[HEP v3 rev11](http://hep.sipcapture.org/hepfiles/HEP3_rev11.pdf)
 
 Other Software Supporting HEP
 -----------------------------
@@ -254,6 +133,7 @@ Contributors
 ------------
 
 - [Matthias Endler](https://github.com/matthias-endler)
+- [Pierre Fenoll](https://github.com/fenollp)
 
 License
 -------
