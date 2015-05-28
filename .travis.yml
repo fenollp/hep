@@ -1,9 +1,7 @@
 language: erlang
 otp_release:
-  - 17.5
   - 17.4
   - 17.3
-  - 17.2
   - 17.1
   - R16B03
   - R16B02
@@ -17,4 +15,7 @@ otp_release:
   - R14B03
   - R14B02
 
-script: make test
+script:
+  - make -j app
+
+after_success: make test
