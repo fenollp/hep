@@ -1,29 +1,9 @@
-%% Copyright (c) 2013, Matthias Endler <matthias.endler@pantech.at>
-%%
-%% Permission to use, copy, modify, and distribute this software for any
-%% purpose with or without fee is hereby granted, provided that the above
-%% copyright notice and this permission notice appear in all copies.
-%%
-%% THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
-%% WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
-%% MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
-%% ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
-%% WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
-%% ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
-%% OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
-
 -module(hep_v3).
 
 -include("hep.hrl").
 
 -export([encode/1]).
 -export([decode/1]).
-
--type chunk_value_length() :: 0..65535.
--type chunk_value() :: binary().
--type chunk() :: {{vendor_id(), chunk_id()}, {chunk_value_length(), chunk_value()}}.
--type vendor_id() :: 1..65535.
--type chunk_id() :: hep:uint16().
 
 %% Chunk Vendor ID
 -define(VENDOR_UNKNOWN,       16#0000).
@@ -69,230 +49,260 @@
 -define(PROTOCOL_H322,     16#0b).
 -define(PROTOCOL_H321,     16#0c).
 
+%% Binary patterns
+-define(vendor(Val), Val:16).
+-define(type(Val),   Val:16).
+-define(length(Val), Val:16).
+-define(protocol_family(Val), Val:8).
+-define(protocol(Val), Val:8).
+-define(port(Val), Val:16).
+-define(timestamp(Val), Val:32).
+-define(node_id(Val),  Val:32).
+-define(payload_type(Val), Val:8).
+
 %% API
 
--spec encode(hep:t()) -> {ok, iolist()} | {error, _}.
+-spec encode(hep:t()) -> {ok, binary()} | {error, _}.
 
-encode(#hep{chunks = Chunks} = Hep) ->
-    case encode(protocol_family, Hep, 0, []) of
-        {ok, GenericLength, GenericChunks} ->
-            case encode_chunks(Chunks, GenericLength, GenericChunks) of
-                {ok, AllChunkLength, AllChunks} ->
-                    Length = 6 + AllChunkLength,
-                    {ok, [<<"HEP3", Length:16>> | lists:reverse(AllChunks)]};
-                {error, packet_too_large} ->
-                    {error, {packet_too_large, Hep}}
-            end;
-        Error ->
-            Error
+encode(#hep{version = ?MODULE} = Hep) ->
+    Payload = pack_chunks(Hep),
+    case byte_size(Payload) + length(?HEP_V3_ID) + 2 of
+        TotalLength when TotalLength > 65535 ->
+            {error, {packet_too_large}};
+        TotalLength ->
+            {ok, <<?HEP_V3_ID, TotalLength:2/unsigned-integer-unit:8, Payload/binary>>}
     end.
 
 
 
--spec decode(binary()) -> {ok, hep:t()} | {error, _, binary()}.
+-spec decode(binary()) -> {ok, hep:t()} | {error, _}.
 
-decode(<<"HEP3", Length:16, _/binary>> = Packet)
-  when Length >= 6 ->
-    read_chunk_header(Packet, 6, Length, #hep{version = ?MODULE}).
+decode(<<?HEP_V3_ID, TotalLength:2/unsigned-integer-unit:8, Rest/binary>>)
+  when TotalLength >= 6 ->
+    Length = TotalLength - length(?HEP_V3_ID) - 2,
+    <<Payload:Length/binary>> = Rest,
+    case chunks_from_payload(Payload, #hep{version = ?MODULE}) of
+        {error,_}=Error -> Error;
+        Hep ->
+            case {Hep#hep.src_ip, Hep#hep.dst_ip} of
+                {{_,_,_,_}, {_,_,_,_}} ->
+                    {ok, Hep#hep{protocol_family = 10}};
+                {{_,_,_,_,_,_,_,_}, {_,_,_,_,_,_,_,_}} ->
+                    {ok, Hep#hep{protocol_family = 2}};
+                {SrcIP, DstIP} ->
+                    {error, {ips_of_unmatching_protocols,SrcIP,DstIP}}
+            end
+    end;
+decode(<<Packet/binary>>) ->
+    {error, {invalid_packet, Packet}}.
 
 %% Internals
 
-encode(_, Hep, Len, _)
-  when Len + 6 > 65535 ->
-    {error, {packet_too_large, Hep}};
-encode(protocol_family, #hep{protocol_family = ProtocolFamily}, _, _)
-  when ProtocolFamily =/= 2, ProtocolFamily =/= 10 ->
-    {error, {unknown_protocol_family, ProtocolFamily}};
-
-encode(protocol_family, #hep{protocol_family = ProtocolFamily} = Hep, Len, Acc) ->
-    ChunkLen = 6 + 1,
-    Chunk = <<0:16, 1:16, ChunkLen:16, ProtocolFamily:8>>,
-    encode(protocol, Hep, Len + ChunkLen, [Chunk|Acc]);
-
-encode(protocol, #hep{protocol = Protocol} = Hep, Len, Acc) ->
-    ChunkLen = 6 + 1,
-    Chunk = <<0:16, 2:16, ChunkLen:16, Protocol:8>>,
-    encode(src_ip, Hep, Len + ChunkLen, [Chunk|Acc]);
-
-encode(src_ip, #hep{protocol_family = 2, src_ip = {I1, I2, I3, I4}} = Hep, Len, Acc) ->
-    ChunkLen = 6 + 4*1,
-    Chunk = <<0:16, 3:16, ChunkLen:16, I1:8, I2:8, I3:8, I4:8>>,
-    encode(dst_ip, Hep, Len + ChunkLen, [Chunk|Acc]);
-encode(src_ip, #hep{protocol_family = 10, src_ip = {I1, I2, I3, I4, I5, I6, I7, I8}} = Hep, Len, Acc) ->
-    ChunkLen = 6 + 8*2,
-    Chunk = <<0:16, 5:16, ChunkLen:16, I1:16, I2:16, I3:16, I4:16, I5:16, I6:16, I7:16, I8:16>>,
-    encode(dst_ip, Hep, Len + ChunkLen, [Chunk|Acc]);
-
-encode(dst_ip, #hep{protocol_family = 2, dst_ip = {I1, I2, I3, I4}} = Hep, Len, Acc) ->
-    ChunkLen = 6 + 4*1,
-    Chunk = <<0:16, 4:16, ChunkLen:16, I1:8, I2:8, I3:8, I4:8>>,
-    encode(src_port, Hep, Len + ChunkLen, [Chunk|Acc]);
-encode(dst_ip, #hep{protocol_family = 10, src_ip = {I1, I2, I3, I4, I5, I6, I7, I8}} = Hep, Len, Acc) ->
-    ChunkLen = 6 + 8*2,
-    Chunk = <<0:16, 6:16, ChunkLen:16, I1:16, I2:16, I3:16, I4:16, I5:16, I6:16, I7:16, I8:16>>,
-    encode(src_port, Hep, Len + ChunkLen, [Chunk|Acc]);
-
-encode(src_port, #hep{src_port = SrcPort} = Hep, Len, Acc) ->
-    ChunkLen = 6 + 2,
-    Chunk = <<0:16, 7:16, ChunkLen:16, SrcPort:16>>,
-    encode(dst_port, Hep, Len + ChunkLen, [Chunk|Acc]);
-
-encode(dst_port, #hep{dst_port = DstPort} = Hep, Len, Acc) ->
-    ChunkLen = 6 + 2,
-    Chunk = <<0:16, 8:16, ChunkLen:16, DstPort:16>>,
-    encode(timestamp, Hep, Len + ChunkLen, [Chunk|Acc]);
-
-encode(timestamp, #hep{timestamp = Timestamp} = Hep, Len, Acc) ->
-    ChunkLen1 = 6 + 4,
-    ChunkLen2 = 6 + 4,
-    Secs = hep_util:timestamp_secs(Timestamp),
-    Micros = hep_util:timestamp_microsecs(Timestamp),
-    Chunk = <<0:16, 9:16, ChunkLen1:16, Secs:32, 0:16, 10:16, ChunkLen2, Micros:32>>,
-    encode(payload_type, Hep, Len + ChunkLen1 + ChunkLen2, [Chunk|Acc]);
-
-encode(payload_type, #hep{payload_type = PayloadType} = Hep, Len, Acc) ->
-    case valid_payload_type(PayloadType) of
-        true ->
-            ChunkLen = 6 + 1,
-            Chunk = <<0:16, 10:16, ChunkLen:16, PayloadType:8>>,
-            encode(payload, Hep, Len + ChunkLen, [Chunk|Acc]);
-        _ ->
-            {error, {invalid_payload_type, PayloadType}}
-    end;
-
-encode(payload, #hep{payload = Payload}, Len, Acc) ->
-    ChunkLen = 6 + byte_size(Payload),
-    Chunk = <<0:16, 15:16, ChunkLen:16, Payload/binary>>,
-    {ok, Len + ChunkLen, [Chunk|Acc]}.
-
-encode_chunks([], Len, Acc) ->
-    {ok, Len, Acc};
-encode_chunks([{{VendorId, ChunkId}, ChunkValue} | Rest], Len, Acc) ->
-    ChunkLength = 6 + byte_size(ChunkValue),
-    case (ChunkLength + Len + 6) > 65535 of
-        false ->
-            Chunk = <<VendorId:16, ChunkId:16, ChunkLength:16, ChunkValue/binary>>,
-            encode_chunks(Rest, Len + ChunkLength, [Chunk|Acc]);
-        true ->
-            {error, packet_too_large}
-    end.
-
--spec valid_payload_type(non_neg_integer()) -> boolean().
-valid_payload_type(1) -> true;
-valid_payload_type(2) -> true;
-valid_payload_type(3) -> true;
-valid_payload_type(4) -> true;
-valid_payload_type(5) -> true;
-valid_payload_type(6) -> true;
-valid_payload_type(7) -> true;
-valid_payload_type(8) -> true;
-valid_payload_type(9) -> true;
-valid_payload_type(16) -> true;
-valid_payload_type(_) -> false.
-
-
 %% @private
-%% TODO this needs some refactoring... ugly, ugly, ugly
--spec read_chunk_header(binary(), non_neg_integer(), non_neg_integer(), hep:state()) ->
-                               {ok, hep:state()} | {error, term(), binary()}.
-read_chunk_header(Packet, Offset, Length, Hep0) ->
-    <<_:Offset/binary, VendorId:16, ChunkId:16, ChunkLen:16, _/binary>> = Packet,
-    case Offset + ChunkLen =< Length of
-        false ->
-            ValueLen = ChunkLen - 6,
-            {ok, Value} = read_chunk_value(Packet, Offset + 6, ValueLen),
-            case decode_chunk(VendorId, ChunkId, ValueLen, Value, Hep0) of
-                {ok, Hep} ->
-                    case Offset + ChunkLen =:= Length of
-                        true ->
-                            #hep{chunks = Chunks} = Hep,
-                            {ok, Hep#hep{chunks = lists:reverse(Chunks)}};
-                        false ->
-                            read_chunk_header(Packet, Offset + ChunkLen, Length, Hep)
-                    end;
-                {error, Reason} ->
-                    {error, Reason, Packet}
-            end;
-        true ->
-            {error, invalid_packet, Packet}
+chunks_from_payload(<<>>, Hep) -> Hep;
+chunks_from_payload(Payload, PrevHep) ->
+    case chunk_from_payload(PrevHep, Payload) of
+        {{error,_}=Error, _Rest} -> Error;
+        {NewHep, Continuation} -> chunks_from_payload(Continuation, NewHep)
     end.
 
 %% @private
--spec read_chunk_value(binary(), non_neg_integer(), non_neg_integer()) -> {ok, binary()}.
-read_chunk_value(Packet, Offset, Len) ->
-    <<_:Offset/binary, Value:Len/binary, _Rest/binary>> = Packet,
-    {ok, Value}.
+chunk_from_payload(Hep, <<Vendor:16
+                          , Type:16
+                          , Length:16
+                          , Rest/binary
+                        >>) ->
+    DataLength = Length -2 -2 -2,
+    <<Data:DataLength/binary, Continuation/binary>> = Rest,
+    NewHep = case vendor(Vendor) of
+                 {error, _}=Error -> Error;
+                 VendorId -> set_field(Type, Data, Hep#hep{vendor = VendorId})
+             end,
+    {NewHep, Continuation}.
 
 %% @private
--spec decode_chunk(vendor_id(), chunk_id(), chunk_value_length(), binary(), hep:t()) ->
-                          {ok, hep:t()} | {error, _}.
-decode_chunk(0, 1, 1, <<ProtocolFamily:8>>, Hep)
-  when ProtocolFamily =:= 2; ProtocolFamily =:= 10 ->
-    {ok, Hep#hep{protocol_family = ProtocolFamily}};
-decode_chunk(0, 2, 1, <<Protocol:8>>, Hep) ->
-    {ok, Hep#hep{protocol = Protocol}};
-decode_chunk(0, 3, 4, <<I1:8, I2:8, I3:8, I4:8>>
-            , #hep{protocol_family = 2} = Hep
-            ) ->
-    {ok, Hep#hep{src_ip = {I1, I2, I3, I4}}};
-decode_chunk(0, 4, 4, <<I1:8, I2:8, I3:8, I4:8>>
-            , #hep{protocol_family = 2} = Hep
-            ) ->
-    {ok, Hep#hep{dst_ip = {I1, I2, I3, I4}}};
-decode_chunk(0, 5, 16
-            , <<I1:16, I2:16, I3:16, I4:16, I5:16, I6:16, I7:16, I8:16>>
-            , #hep{protocol_family = 10} = Hep
-            ) ->
-    {ok, Hep#hep{src_ip = {I1, I2, I3, I4, I5, I6, I7, I8}}};
-decode_chunk(0, 6, 16
-            , <<I1:16, I2:16, I3:16, I4:16, I5:16, I6:16, I7:16, I8:16>>
-            , #hep{protocol_family = 10} = Hep
-            ) ->
-    {ok, Hep#hep{dst_ip = {I1, I2, I3, I4, I5, I6, I7, I8}}};
-decode_chunk(0, 7, 2, <<SrcPort:16>>, Hep) ->
-    {ok, Hep#hep{src_port = SrcPort}};
-decode_chunk(0, 8, 2, <<DstPort:16>>, Hep) ->
-    {ok, Hep#hep{dst_port = DstPort}};
-decode_chunk(0, 9, 4, <<TimestampSecs:32>>, Hep) ->
-    put_ts_secs(TimestampSecs, Hep);
-decode_chunk(0, 10, 4, <<TimestampUSecs:32>>, Hep) ->
-    put_ts_usecs(TimestampUSecs, Hep);
-decode_chunk(0, 11, 1, <<PayloadType:8>>, Hep) ->
-    {ok, Hep#hep{payload_type = PayloadType}};
-decode_chunk(0, 12, 4, <<NodeId:32>>, Hep) ->
-    {ok, Hep#hep{node_id = NodeId}};
-decode_chunk(0, 13, 2, <<_KeepAlive:16>>, Hep) ->
-    {ok, Hep};
-decode_chunk(0, 14, _, <<_AuthKey/binary>>, Hep) ->
-    {ok, Hep};
-decode_chunk(0, 15, _, <<Payload/binary>>, Hep) ->
-    {ok, Hep#hep{payload = Payload}};
-decode_chunk(0, ChunkId, Len, Value, _Hep)
-  when ChunkId >= 1, ChunkId =< 15 ->
-    {error, {invalid_chunk, 0, ChunkId, Len, Value}};
-decode_chunk(0, _, _, _, Hep) ->
-    {ok, Hep};
-decode_chunk(VendorId, ChunkId, Len, Value, #hep{chunks = Chunks0} = Hep) ->
-    Chunks = [{{VendorId, ChunkId}, {Len, Value}} | Chunks0],
-    {ok, Hep#hep{chunks = Chunks}}.
-
-%% @private
--spec put_ts_secs(non_neg_integer(), hep:t()) -> {ok, hep:t()}.
-put_ts_secs(TimestampSecs, #hep{timestamp = Timestamp} = Hep) ->
-    MegaSecs = TimestampSecs div 1000000,
-    Secs     = TimestampSecs rem 1000000,
-    case Timestamp of
+set_field(?IP_PROTOCOL_FAMILY, <<?protocol_family(Data)>>, Hep) ->
+    Hep#hep{protocol_family = Data};
+set_field(?IP_PROTOCOL_ID, <<?protocol(Data)>>, Hep) ->
+    Hep#hep{protocol = Data};
+set_field(?IPV4_SOURCE_ADDRESS, <<?IPV4(I1, I2, I3, I4)>>, Hep) ->
+    Hep#hep{src_ip = {I1, I2, I3, I4}};
+set_field(?IPV4_DESTINATION_ADDRESS, <<?IPV4(I1, I2, I3, I4)>>, Hep) ->
+    Hep#hep{dst_ip = {I1, I2, I3, I4}};
+set_field(?IPV6_SOURCE_ADDRESS, <<?IPV6(I1, I2, I3, I4, I5, I6, I7, I8)>>, Hep) ->
+    Hep#hep{src_ip = {I1, I2, I3, I4, I5, I6, I7, I8}};
+set_field(?IPV6_DESTINATION_ADDRESS, <<?IPV6(I1, I2, I3, I4, I5, I6, I7, I8)>>, Hep) ->
+    Hep#hep{dst_ip = {I1, I2, I3, I4, I5, I6, I7, I8}};
+set_field(?PROTOCOL_SOURCE_PORT, <<?port(Data)>>, Hep) ->
+    Hep#hep{src_port = Data};
+set_field(?PROTOCOL_DESTINATION_PORT, <<?port(Data)>>, Hep) ->
+    Hep#hep{dst_port = Data};
+set_field(?TIMESTAMP_IN_SECONDS, <<?timestamp(Secs)>>, Hep = #hep{timestamp = TS}) ->
+    MegaSecs = Secs div 1000000,
+    TSSecs   = Secs rem 1000000,
+    case TS of
         {_, _, Micros} ->
-            {ok, Hep#hep{timestamp = {MegaSecs, Secs, Micros}}};
+            Hep#hep{timestamp = {MegaSecs, TSSecs, Micros}};
         undefined ->
-            {ok, Hep#hep{timestamp = {MegaSecs, Secs, 0}}}
-    end.
+            Hep#hep{timestamp = {MegaSecs, TSSecs, 0}}
+    end;
+set_field(?TIMESTAMP_MS_OFFSET, <<?timestamp(MicroSecs)>>, Hep = #hep{timestamp = TS}) ->
+    case TS of
+        undefined ->
+            Hep#hep{timestamp = {0, 0, MicroSecs}};
+        {M, S, _} ->
+            Hep#hep{timestamp = {M, S, MicroSecs}}
+    end;
+set_field(?PROTOCOL_TYPE, <<?payload_type(Data)>>, Hep) ->
+    case protocol_type(Data) of
+        {error, _}=Error -> Error;
+        Protocol -> Hep#hep{payload_type = Protocol}
+    end;
+set_field(?CAPTURE_AGENT_ID, <<?node_id(Data)>>, Hep) ->
+    Hep#hep{node_id = Data};
+set_field(?KEEP_ALIVE_TIMER, <<_Data:16>>, Hep) ->
+    %% Hep#hep{keep_alive_timer = Data};
+    Hep;
+set_field(?AUTHENTICATE_KEY, _Data, Hep) ->
+    %% Hep#hep{authenticate_key = Data};
+    Hep;
+set_field(?CAPTURED_PACKET_PAYLOAD, Data, Hep) ->
+    Hep#hep{payload = Data};
+set_field(?CAPTURED_COMPRESSED_PAYLOAD, Data, Hep) ->
+    Hep#hep{payload = Data};
+set_field(?INTERNAL_CORRELATION_ID, _Data, Hep) ->
+    %% Hep#hep{internal_correlation_id = Data};
+    Hep;
+set_field(?VLAN_ID, <<_Data:8>>, Hep) ->
+    %% Hep#hep{vlan_id = Data}.
+    Hep.
 
 %% @private
--spec put_ts_usecs(non_neg_integer(), hep:t()) -> {ok, hep:t()}.
-put_ts_usecs(TimestampUSecs, #hep{timestamp = undefined} = Hep) ->
-    {ok, Hep#hep{timestamp = {0, 0, TimestampUSecs}}};
-put_ts_usecs(TimestampUSecs, #hep{timestamp = {M, S, _}} = Hep) ->
-    {ok, Hep#hep{timestamp = {M, S, TimestampUSecs}}}.
+vendor(?VENDOR_UNKNOWN) -> 'unknown';
+vendor(?VENDOR_FREESWITCH) -> 'freeswitch';
+vendor(?VENDOR_KAMALIO_SER) -> 'kamailio';
+vendor(?VENDOR_OPENSIPS) -> 'opensips';
+vendor(?VENDOR_ASTERISK) -> 'asterisk';
+vendor(?VENDOR_HOMER_PROJECT) -> 'homer';
+vendor(?VENDOR_SIPXECS) -> 'sipxecs';
+vendor('unknown') -> ?VENDOR_UNKNOWN;
+vendor('freeswitch') -> ?VENDOR_FREESWITCH;
+vendor('kamailio') -> ?VENDOR_KAMALIO_SER;
+vendor('opensips') -> ?VENDOR_OPENSIPS;
+vendor('asterisk') -> ?VENDOR_ASTERISK;
+vendor('homer') -> ?VENDOR_HOMER_PROJECT;
+vendor('sipxecs') -> ?VENDOR_SIPXECS;
+vendor(Vendor) ->
+    {error, {invalid_vendor, Vendor}}.
+
+%% @private
+protocol_type(?PROTOCOL_RESERVED) -> 'reserved';
+protocol_type(?PROTOCOL_SIP) -> 'sip';
+protocol_type(?PROTOCOL_XMPP) -> 'xmpp';
+protocol_type(?PROTOCOL_SDP) -> 'sdp';
+protocol_type(?PROTOCOL_RTP) -> 'rtp';
+protocol_type(?PROTOCOL_RTCP) -> 'rtcp';
+protocol_type(?PROTOCOL_MGCP) -> 'mgcp';
+protocol_type(?PROTOCOL_MEGACO) -> 'megaco';
+protocol_type(?PROTOCOL_M2UA) -> 'm2ua';
+protocol_type(?PROTOCOL_M3UA) -> 'm3ua';
+protocol_type(?PROTOCOL_IAX) -> 'iax';
+protocol_type(?PROTOCOL_H322) -> 'h322';
+protocol_type(?PROTOCOL_H321) -> 'h321';
+protocol_type('reserved') -> ?PROTOCOL_RESERVED;
+protocol_type('sip') -> ?PROTOCOL_SIP;
+protocol_type('xmpp') -> ?PROTOCOL_XMPP;
+protocol_type('sdp') -> ?PROTOCOL_SDP;
+protocol_type('rtp') -> ?PROTOCOL_RTP;
+protocol_type('rtcp') -> ?PROTOCOL_RTCP;
+protocol_type('mgcp') -> ?PROTOCOL_MGCP;
+protocol_type('megaco') -> ?PROTOCOL_MEGACO;
+protocol_type('m2ua') -> ?PROTOCOL_M2UA;
+protocol_type('m3ua') -> ?PROTOCOL_M3UA;
+protocol_type('iax') -> ?PROTOCOL_IAX;
+protocol_type('h322') -> ?PROTOCOL_H322;
+protocol_type('h321') -> ?PROTOCOL_H321;
+protocol_type(Protocol) ->
+    {error, {invalid_protocol, Protocol}}.
+
+
+pack_chunks(Hep) ->
+    encode(protocol_family, <<>>, Hep).
+
+encode(protocol_family, _Acc, #hep{protocol_family = ProtocolFamily})
+  when ProtocolFamily =/= 2, ProtocolFamily =/= 10 ->
+    {error, {invalid_protocol_family,ProtocolFamily}};
+encode(protocol_family=Field, Acc, Hep) ->
+    Chunk = make_chunk(Field, Hep),
+    encode(protocol, <<Chunk/binary, Acc/binary>>, Hep);
+encode(protocol=Field, Acc, Hep) ->
+    Chunk = make_chunk(Field, Hep),
+    encode(src_ip, <<Chunk/binary, Acc/binary>>, Hep);
+encode(src_ip=Field, Acc, Hep) ->
+    Chunk = make_chunk(Field, Hep),
+    encode(dst_ip, <<Chunk/binary, Acc/binary>>, Hep);
+encode(dst_ip=Field, Acc, Hep) ->
+    Chunk = make_chunk(Field, Hep),
+    encode(src_port, <<Chunk/binary, Acc/binary>>, Hep);
+encode(src_port=Field, Acc, Hep) ->
+    Chunk = make_chunk(Field, Hep),
+    encode(dst_port, <<Chunk/binary, Acc/binary>>, Hep);
+encode(timestamp=Field, Acc, Hep) ->
+    Chunk = make_chunk(Field, Hep),
+    encode(payload_type, <<Chunk/binary, Acc/binary>>, Hep);
+encode(payload_type=Field, Acc, Hep) ->
+    Chunk = make_chunk(Field, Hep),
+    encode(payload, <<Chunk/binary, Acc/binary>>, Hep);
+encode(payload=Field, Acc, Hep) ->
+    Chunk = make_chunk(Field, Hep),
+    <<Chunk/binary, Acc/binary>>.
+
+
+make_chunk(protocol_family, #hep{protocol_family = Data}=Hep) ->
+    do_make_chunk(Hep, ?IP_PROTOCOL_FAMILY, <<?protocol_family(Data)>>);
+make_chunk(protocol, #hep{protocol = Data}=Hep) ->
+    do_make_chunk(Hep, ?IP_PROTOCOL_ID, <<?protocol(Data)>>);
+
+make_chunk(src_ip, #hep{ protocol_family = 2
+                       , src_ip = {I1, I2, I3, I4}
+                       }=Hep) ->
+    do_make_chunk(Hep, ?IPV4_SOURCE_ADDRESS, <<?IPV4(I1, I2, I3, I4)>>);
+make_chunk(src_ip, #hep{ protocol_family = 10
+                       , src_ip = {I1, I2, I3, I4, I5, I6, I7, I8}
+                       }=Hep) ->
+    do_make_chunk(Hep, ?IPV6_SOURCE_ADDRESS, <<?IPV6(I1, I2, I3, I4, I5, I6, I7, I8)>>);
+
+make_chunk(dst_ip, #hep{ protocol_family = 2
+                       , dst_ip = {I1, I2, I3, I4}
+                       }=Hep) ->
+    do_make_chunk(Hep, ?IPV4_DESTINATION_ADDRESS, <<?IPV4(I1, I2, I3, I4)>>);
+make_chunk(dst_ip, #hep{ protocol_family = 10
+                       , dst_ip = {I1, I2, I3, I4, I5, I6, I7, I8}
+                       }=Hep) ->
+    do_make_chunk(Hep, ?IPV6_DESTINATION_ADDRESS, <<?IPV6(I1, I2, I3, I4, I5, I6, I7, I8)>>);
+
+make_chunk(src_port, #hep{src_port = Data}=Hep) ->
+    do_make_chunk(Hep, ?PROTOCOL_SOURCE_PORT, <<?port(Data)>>);
+
+make_chunk(dst_port, #hep{dst_port = Data}=Hep) ->
+    do_make_chunk(Hep, ?PROTOCOL_DESTINATION_PORT, <<?port(Data)>>);
+
+make_chunk(timestamp, #hep{timestamp = Timestamp}=Hep) ->
+    Seconds = hep_util:timestamp_secs(Timestamp),
+    Micros  = hep_util:timestamp_microsecs(Timestamp),
+    Chunk1 = do_make_chunk(Hep, ?TIMESTAMP_IN_SECONDS, <<?timestamp(Seconds)>>),
+    Chunk2 = do_make_chunk(Hep, ?TIMESTAMP_MS_OFFSET, <<?timestamp(Micros)>>),
+    <<Chunk1/binary, Chunk2/binary>>;
+
+make_chunk(payload_type, #hep{payload_type = Data}=Hep) ->
+    do_make_chunk(Hep, ?PROTOCOL_TYPE, <<?payload_type(Data)>>);
+
+make_chunk(payload, #hep{payload = Payload}=Hep) ->
+    do_make_chunk(Hep, ?CAPTURED_PACKET_PAYLOAD, Payload).
+
+
+do_make_chunk(#hep{vendor = Vendor}, Type, Value) ->
+    Len = byte_size(Value),
+    <<(vendor(Vendor)):16, Type:16, (2+2+2 + Len):16, Value/binary>>.
 
 %% End of Module.

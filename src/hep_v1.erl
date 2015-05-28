@@ -32,9 +32,9 @@ encode(#hep{ protocol_family = ProtocolFamily = 2
            , payload_type = 1
            , payload = Payload}) ->
     Length = 16,
-    Bin = <<1:8, Length:8, ProtocolFamily:8, Protocol:8, SrcPort:16, DstPort:16,
-            S1:8, S2:8, S3:8, S4:8,
-            D1:8, D2:8, D3:8, D4:8,
+    Bin = <<?HEP_V1_ID, Length:8, ProtocolFamily:8, Protocol:8, SrcPort:16, DstPort:16,
+            ?IPV4(S1, S2, S3, S4),
+            ?IPV4(D1, D2, D3, D4),
             Payload/binary>>,
     {ok, Bin};
 
@@ -47,9 +47,9 @@ encode(#hep{ protocol_family = ProtocolFamily = 10
            , payload_type = 1
            , payload = Payload}) ->
     Length = 40,
-    Bin = <<1:8, Length:8, ProtocolFamily:8, Protocol:8, SrcPort:16, DstPort:16,
-            S1:16, S2:16, S3:16, S4:16, S5:16, S6:16, S7:16, S8:16,
-            D1:16, D2:16, D3:16, D4:16, D5:16, D6:16, D7:16, D8:16,
+    Bin = <<?HEP_V1_ID, Length:8, ProtocolFamily:8, Protocol:8, SrcPort:16, DstPort:16,
+            ?IPV6(S1, S2, S3, S4, S5, S6, S7, S8),
+            ?IPV6(D1, D2, D3, D4, D5, D6, D7, D8),
             Payload/binary>>,
     {ok, Bin};
 
@@ -63,11 +63,11 @@ encode(#hep{payload_type = PayloadType})
 
 
 
--spec decode(binary()) -> {ok, hep:t()} | {error, _, binary()}.
+-spec decode(binary()) -> {ok, hep:t()} | {error, _}.
 
-decode(<<1:8, Length:8, ProtocolFamily:8, Protocol:8, SrcPort:16, DstPort:16,
-         S1:8, S2:8, S3:8, S4:8,
-         D1:8, D2:8, D3:8, D4:8,
+decode(<<?HEP_V1_ID, Length:8, ProtocolFamily:8, Protocol:8, SrcPort:16, DstPort:16,
+         ?IPV4(S1, S2, S3, S4),
+         ?IPV4(D1, D2, D3, D4),
          Payload/binary>>)
   when Length == 16, ProtocolFamily == 2 ->
     HEP = #hep{ version = ?MODULE
@@ -83,9 +83,9 @@ decode(<<1:8, Length:8, ProtocolFamily:8, Protocol:8, SrcPort:16, DstPort:16,
               },
     {ok, HEP};
 
-decode(<<1:8, Length:8, ProtocolFamily:8, Protocol:8, SrcPort:16, DstPort:16,
-         S1:16, S2:16, S3:16, S4:16, S5:16, S6:16, S7:16, S8:16,
-         D1:16, D2:16, D3:16, D4:16, D5:16, D6:16, D7:16, D8:16,
+decode(<<?HEP_V1_ID, Length:8, ProtocolFamily:8, Protocol:8, SrcPort:16, DstPort:16,
+         ?IPV6(S1, S2, S3, S4, S5, S6, S7, S8),
+         ?IPV6(D1, D2, D3, D4, D5, D6, D7, D8),
          Payload/binary>>)
   when Length == 40, ProtocolFamily == 10 ->
     HEP = #hep{ version = ?MODULE
@@ -102,7 +102,7 @@ decode(<<1:8, Length:8, ProtocolFamily:8, Protocol:8, SrcPort:16, DstPort:16,
     {ok, HEP};
 
 decode(<<Other/binary>>) ->
-    {error, invalid_packet, Other}.
+    {error, {invalid_packet, Other}}.
 
 %% Internals
 

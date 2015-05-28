@@ -21,12 +21,21 @@
 	     , src_port :: inet:port_number()
 	     , dst_ip :: inet:ip_address()
 	     , dst_port :: inet:port_number()
-	     , timestamp :: erlang:timestamp()
+	     , timestamp :: erlang:timestamp() | undefined
 	     , node_id :: hep:uint16() | hep:uint32() | undefined
-	     , payload_type = 1 :: hep:uint8()
-	     , payload = <<>> :: binary()
-	     , chunks = [] :: [hep:chunk()]
+	     , payload_type :: hep:uint8()
+	     , payload :: binary()
+             , vendor :: atom() | undefined
              }).
+
+-define(HEP_V1_ID, 1:8).
+-define(HEP_V2_ID, 2:8).
+-define(HEP_V3_ID, "HEP3").
+
+-define(IPV4(I1, I2, I3, I4),
+        I1:8, I2:8, I3:8, I4:8).
+-define(IPV6(I1, I2, I3, I4, I5, I6, I7, I8),
+        I1:16, I2:16, I3:16, I4:16, I5:16, I6:16, I7:16, I8:16).
 
 -define(HEP_HRL, true).
 -endif.

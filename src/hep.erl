@@ -43,12 +43,12 @@ encode(Hep) ->
     {error, {invalid_hep, Hep}}.
 
 
--spec decode(binary()) -> {ok, t()} | {error, _, binary()}.
-decode(Packet = <<1:8, _Rest/binary>>) ->
+-spec decode(binary()) -> {ok, t()} | {error, _}.
+decode(Packet = <<?HEP_V1_ID, _Rest/binary>>) ->
     hep_v1:decode(Packet);
-decode(Packet = <<2:8, _Rest/binary>>) ->
+decode(Packet = <<?HEP_V2_ID, _Rest/binary>>) ->
     hep_v2:decode(Packet);
-decode(Packet = <<"HEP3", _Rest/binary>>) ->
+decode(Packet = <<?HEP_V3_ID, _Rest/binary>>) ->
     hep_v3:decode(Packet);
 decode(Packet = <<_/binary>>) ->
     {error, invalid_packet, Packet}.
