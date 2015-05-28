@@ -86,9 +86,9 @@ decode(<<?HEP_V3_ID, TotalLength:2/unsigned-integer-unit:8, Rest/binary>>)
         Hep ->
             case {Hep#hep.src_ip, Hep#hep.dst_ip} of
                 {{_,_,_,_}, {_,_,_,_}} ->
-                    {ok, Hep#hep{protocol_family = 10}};
+                    {ok, Hep#hep{protocol_family = ?FAMILY_IPV4}};
                 {{_,_,_,_,_,_,_,_}, {_,_,_,_,_,_,_,_}} ->
-                    {ok, Hep#hep{protocol_family = 2}};
+                    {ok, Hep#hep{protocol_family = ?FAMILY_IPV6}};
                 {SrcIP, DstIP} ->
                     {error, {ips_of_unmatching_protocols,SrcIP,DstIP}}
             end
@@ -122,6 +122,7 @@ chunk_from_payload(Hep, <<Vendor:16
 
 %% @private
 set_field(?IP_PROTOCOL_FAMILY, <<?protocol_family(Data)>>, Hep) ->
+    io:format("set_dielf ~p\n", [Data]),
     Hep#hep{protocol_family = Data};
 set_field(?IP_PROTOCOL_ID, <<?protocol(Data)>>, Hep) ->
     Hep#hep{protocol = Data};
@@ -230,7 +231,7 @@ pack_chunks(Hep) ->
     encode(protocol_family, <<>>, Hep).
 
 encode(protocol_family, _Acc, #hep{protocol_family = ProtocolFamily})
-  when ProtocolFamily =/= 2, ProtocolFamily =/= 10 ->
+  when ProtocolFamily =/= ?FAMILY_IPV4, ProtocolFamily =/= ?FAMILY_IPV6 ->
     {error, {invalid_protocol_family,ProtocolFamily}};
 encode(protocol_family=Field, Acc, Hep) ->
     Chunk = make_chunk(Field, Hep),
@@ -263,20 +264,20 @@ make_chunk(protocol_family, #hep{protocol_family = Data}=Hep) ->
 make_chunk(protocol, #hep{protocol = Data}=Hep) ->
     do_make_chunk(Hep, ?IP_PROTOCOL_ID, <<?protocol(Data)>>);
 
-make_chunk(src_ip, #hep{ protocol_family = 2
+make_chunk(src_ip, #hep{ protocol_family = ?FAMILY_IPV4
                        , src_ip = {I1, I2, I3, I4}
                        }=Hep) ->
     do_make_chunk(Hep, ?IPV4_SOURCE_ADDRESS, <<?IPV4(I1, I2, I3, I4)>>);
-make_chunk(src_ip, #hep{ protocol_family = 10
+make_chunk(src_ip, #hep{ protocol_family = ?FAMILY_IPV6
                        , src_ip = {I1, I2, I3, I4, I5, I6, I7, I8}
                        }=Hep) ->
     do_make_chunk(Hep, ?IPV6_SOURCE_ADDRESS, <<?IPV6(I1, I2, I3, I4, I5, I6, I7, I8)>>);
 
-make_chunk(dst_ip, #hep{ protocol_family = 2
+make_chunk(dst_ip, #hep{ protocol_family = ?FAMILY_IPV4
                        , dst_ip = {I1, I2, I3, I4}
                        }=Hep) ->
     do_make_chunk(Hep, ?IPV4_DESTINATION_ADDRESS, <<?IPV4(I1, I2, I3, I4)>>);
-make_chunk(dst_ip, #hep{ protocol_family = 10
+make_chunk(dst_ip, #hep{ protocol_family = ?FAMILY_IPV6
                        , dst_ip = {I1, I2, I3, I4, I5, I6, I7, I8}
                        }=Hep) ->
     do_make_chunk(Hep, ?IPV6_DESTINATION_ADDRESS, <<?IPV6(I1, I2, I3, I4, I5, I6, I7, I8)>>);

@@ -23,7 +23,7 @@
 
 -spec encode(hep:t()) -> {ok, binary()} | {error, _}.
 
-encode(#hep{ protocol_family = ProtocolFamily = 2
+encode(#hep{ protocol_family = ProtocolFamily = ?FAMILY_IPV4
            , protocol = Protocol
            , src_ip = {S1, S2, S3, S4}
            , src_port = SrcPort
@@ -38,7 +38,7 @@ encode(#hep{ protocol_family = ProtocolFamily = 2
             Payload/binary>>,
     {ok, Bin};
 
-encode(#hep{ protocol_family = ProtocolFamily = 10
+encode(#hep{ protocol_family = ProtocolFamily = ?FAMILY_IPV6
            , protocol = Protocol
            , src_ip = {S1, S2, S3, S4, S5, S6, S7, S8}
            , src_port = SrcPort
@@ -54,7 +54,7 @@ encode(#hep{ protocol_family = ProtocolFamily = 10
     {ok, Bin};
 
 encode(#hep{protocol_family = ProtocolFamily})
-  when ProtocolFamily =/= 2; ProtocolFamily =/= 10 ->
+  when ProtocolFamily =/= ?FAMILY_IPV4; ProtocolFamily =/= ?FAMILY_IPV6 ->
     {error, {unknown_protocol_family, ProtocolFamily}};
 
 encode(#hep{payload_type = PayloadType})
@@ -69,7 +69,7 @@ decode(<<?HEP_V1_ID, Length:8, ProtocolFamily:8, Protocol:8, SrcPort:16, DstPort
          ?IPV4(S1, S2, S3, S4),
          ?IPV4(D1, D2, D3, D4),
          Payload/binary>>)
-  when Length == 16, ProtocolFamily == 2 ->
+  when Length == 16, ProtocolFamily == ?FAMILY_IPV4 ->
     HEP = #hep{ version = ?MODULE
               , protocol_family = ProtocolFamily
               , protocol = Protocol
@@ -87,7 +87,7 @@ decode(<<?HEP_V1_ID, Length:8, ProtocolFamily:8, Protocol:8, SrcPort:16, DstPort
          ?IPV6(S1, S2, S3, S4, S5, S6, S7, S8),
          ?IPV6(D1, D2, D3, D4, D5, D6, D7, D8),
          Payload/binary>>)
-  when Length == 40, ProtocolFamily == 10 ->
+  when Length == 40, ProtocolFamily == ?FAMILY_IPV6 ->
     HEP = #hep{ version = ?MODULE
               , protocol_family = ProtocolFamily
               , protocol = Protocol

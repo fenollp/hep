@@ -28,9 +28,14 @@
              , vendor :: atom() | undefined
              }).
 
+%% HEP Version IDs
 -define(HEP_V1_ID, 1:8).
 -define(HEP_V2_ID, 2:8).
 -define(HEP_V3_ID, "HEP3").
+
+%% Protocol Families
+-define(FAMILY_IPV4, 16#02).
+-define(FAMILY_IPV6, 16#0a).
 
 -define(IPV4(I1, I2, I3, I4),
         I1:8, I2:8, I3:8, I4:8).
