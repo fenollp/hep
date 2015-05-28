@@ -6,28 +6,50 @@
 -include_lib("eunit/include/eunit.hrl").
 -include("hep.hrl").
 
--export([data/0]).
+-export([hep/0, bin/0]).
 
 %% API tests.
 
-example_packet_test() ->
-    ?assertMatch({ok, #hep{ vendor = 'unknown'
-                          , protocol_family = 2
-                          , protocol = 17
-                          , src_ip = {212, 202, 0, 1}
-                          , dst_ip = {82, 116, 0, 211}
-                          , src_port = 12010
-                          , dst_port = 5060
-                          , timestamp = {1313, 440459, 120000}
-                          , payload_type = 'sip'
-                          , node_id = 228
-                          , payload = <<"INVITE sip:bob">>
-                          , _ = _
-                          }}, hep_v3:decode(data())).
+decode_test() ->
+    Hep = hep(),
+    ?assertEqual({ok, Hep}, hep_v3:decode(bin())).
+
+encode_test() ->
+    Hep = hep(),
+    {ok, Data} = hep_v3:encode(Hep),
+    ?assertEqual({ok, Hep}, hep_v3:decode(Data)).
+
+ipv4_encode_decode_test() ->
+    Hep = hep(),
+    {ok, Bin} = hep_v3:encode(Hep),
+    ?assertEqual({ok, Hep}, hep_v3:decode(Bin)).
+
+ipv6_encode_decode_test() ->
+    Hep = (hep())#hep{ protocol_family = 'ipv6'
+                     , src_ip = {1, 2, 3, 4, 5, 6, 7, 8}
+                     , dst_ip = {8, 7, 6, 5, 4, 3, 2, 1}
+                     },
+    {ok, Bin} = hep_v3:encode(Hep),
+    ?assertEqual({ok, Hep}, hep_v3:decode(Bin)).
 
 %% Internals
 
-data() ->
+hep() ->
+    #hep{ version = 'hep_v3'
+        , vendor = 'unknown'
+        , protocol_family = 'ipv4'
+        , protocol = 17
+        , src_ip = {212, 202, 0, 1}
+        , dst_ip = {82, 116, 0, 211}
+        , src_port = 12010
+        , dst_port = 5060
+        , timestamp = {1313, 440459, 120000}
+        , payload_type = 'sip'
+        , node_id = 228
+        , payload = <<"INVITE sip:bob">>
+        }.
+
+bin() ->
     <<16#48, 16#45, 16#50, 16#33
       %% HEP3 ID
       ,16#00, 16#71
