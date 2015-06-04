@@ -191,7 +191,7 @@ pack_chunks(Hep) ->
 
 
 make_chunk(protocol_family, #hep{protocol_family = Data}=Hep) ->
-    do_make_chunk(Hep, ?IP_PROTOCOL_FAMILY, <<?protocol_family((hep_util:protocol_family(Data)))>>);
+    do_make_chunk(Hep, ?IP_PROTOCOL_FAMILY, <<?protocol_family(hep_util:protocol_family(Data))>>);
 make_chunk(protocol, #hep{protocol = Data}=Hep) ->
     do_make_chunk(Hep, ?IP_PROTOCOL_ID, <<?protocol(Data)>>);
 
@@ -229,7 +229,7 @@ make_chunk(node_id, #hep{node_id = Data}=Hep) ->
     do_make_chunk(Hep, ?CAPTURE_AGENT_ID, <<?node_id(Data)>>);
 
 make_chunk(payload_type, #hep{payload_type = Data}=Hep) ->
-    do_make_chunk(Hep, ?PROTOCOL_TYPE, <<?payload_type((hep_util:payload_type(Data)))>>);
+    do_make_chunk(Hep, ?PROTOCOL_TYPE, <<?payload_type(hep_util:payload_type(Data))>>);
 make_chunk(payload, #hep{payload = Payload}=Hep) ->
     do_make_chunk(Hep, ?CAPTURED_PACKET_PAYLOAD, Payload).
 
