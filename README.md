@@ -1,4 +1,4 @@
-hep_erlang [![Build Status](https://travis-ci.org/fenollp/hep_erlang.svg?branch=master)](https://travis-ci.org/fenollp/hep_erlang)
+hep [![Build Status](https://travis-ci.org/fenollp/hep.svg?branch=master)](https://travis-ci.org/fenollp/hep)
 ==========
 
 An Erlang implementation of HEP (Homer Encapsulation Protocol).

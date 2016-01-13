@@ -12,16 +12,17 @@
 %% ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 %% OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
-{application, hep, [ {description, "hep - Homer Encapsulation Protocol"}
-                   , {vsn, "1.5.4"}
-                   , {modules, [ hep
-                               , hep_util
-                               , hep_v1
-                               , hep_v2
-                               , hep_v3
-                               ]}
-                   , {registered, []}
-                   , {applications, [ kernel
-                                    , stdlib
-                                    ]}
-]}.
+{application, hep,
+ [ {description, "HEP: Erlang implementation of HEP/EEP Encapsulation Protocol ~ sipcapture.org"}
+ , {vsn, "1.6.0"}
+ , {modules, [ hep
+             , hep_util
+             , hep_v1
+             , hep_v2
+             , hep_v3
+             ]}
+ , {registered, []}
+ , {applications, [ kernel
+                  , stdlib
+                  ]}
+ ]}.
